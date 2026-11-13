@@ -136,7 +136,7 @@ const clr=()=>timers.splice(0).forEach(clearInterval);
   if(db){
     db.collection("posts").onSnapshot(s=>{
       clearTimeout(t);loaded=true;
-      posts=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.created||0)-(a.created||0));
+      posts=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>dk(b).localeCompare(dk(a))||(b.created||0)-(a.created||0));
       if(view.n!=="edit")render();
     },e=>{clearTimeout(t);loaded=true;render()});
   }else{clearTimeout(t);loaded=true;render();}
@@ -158,6 +158,9 @@ function inits(root){root.querySelectorAll(".ss").forEach(el=>{
 
 const au=a=>a?`<span class="au ${esc(a)}">${esc(a)}</span>`:"";
 const cfgForm=`<div class="f" style="margin-top:20px"><p class="note">保存先（Supabase）の設定をしてください。この端末で一度だけ入力します。</p><label>Project URL</label><input id="su" placeholder="https://xxxx.supabase.co"><label>Key（anon public / publishable）</label><input id="sk"><div class="row"><button class="btn" id="ss">設定する</button></div></div>`;
+const today=new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const dk=p=>p.date||(p.created?new Date(p.created-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10):"");
+const fd=p=>dk(p)?dk(p).replace(/-/g,"/")+" ":"";
 const bodyText=p=>(p.blocks||[]).filter(b=>b.t==="text").map(b=>b.v).join(" ");
 const allTags=()=>[...new Set(posts.flatMap(p=>p.tags||[]))];
 function match(p){
@@ -166,7 +169,7 @@ function match(p){
   if(!k)return true;
   return [p.title,p.author,bodyText(p),p.pref,(p.tags||[]).join(" ")].join(" ").toLowerCase().includes(k);
 }
-const card=p=>`<div class="card" data-open="${p.id}">${p.thumb?im(p.thumb,"th"):`<div class="th"></div>`}<div><h3>${esc(p.title)}</h3><div class="meta">${au(p.author)}${p.pref?esc(full(p.pref)):""} ${(p.tags||[]).map(t=>"#"+esc(t)).join(" ")}</div></div></div>`;
+const card=p=>`<div class="card" data-open="${p.id}">${p.thumb?im(p.thumb,"th"):`<div class="th"></div>`}<div><h3>${esc(p.title)}</h3><div class="meta">${au(p.author)}${fd(p)}${p.pref?esc(full(p.pref)):""} ${(p.tags||[]).map(t=>"#"+esc(t)).join(" ")}</div></div></div>`;
 const tagBar=()=>`<div class="tags">${allTags().map(t=>`<span class="tag ${tagSel===t?"on":""}" data-tag="${esc(t)}">#${esc(t)}</span>`).join("")}</div>`;
 
 function render(){
@@ -214,7 +217,7 @@ function postView(){
   if(!p)return go({n:"home"});
   let k=0;
   const body=(p.blocks||[]).map(b=>b.t==="text"?`<p>${esc(b.v)}</p>`:b.t==="img"?`<div class="pol r${k++%2}">${im(b.u)}</div>`:b.t==="show"?`<div class="pol r${k++%2}"><div class="ss"><div class="tr">${(b.us||[]).map(u=>im(u)).join("")}</div><button class="ar pv">‹</button><button class="ar nx">›</button><div class="dt"></div></div></div>`:`<video src="${esc(b.u)}" controls playsinline></video>`).join("");
-  const d=p.created?new Date(p.created).toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"}):"";
+  const d=dk(p)?new Date(dk(p)+"T00:00:00").toLocaleDateString("ja-JP",{year:"numeric",month:"long",day:"numeric"}):"";
   $.innerHTML=`<button class="back" id="b">← もどる</button><div class="art">${p.thumb?`<div class="pol r0">${im(p.thumb)}</div>`:""}
   <div class="hd">${p.pref?`<span class="pb">${esc(full(p.pref))}</span>`:""}<h1>${esc(p.title)}</h1><div class="meta">${au(p.author)}${d}</div></div>
   <div class="bd">${body}</div><div class="tl">${(p.tags||[]).map(t=>`<span class="tag" data-tag="${esc(t)}">#${esc(t)}</span>`).join("")}</div></div>
@@ -262,13 +265,14 @@ function editView(){
   <label>タイトル</label><input id="t" value="${esc(ed.title)}">
   <label>都道府県</label><select id="pf"><option value="">選択してください</option>${o}</select>
   <label>書いた人</label><select id="aw"><option value="">選択してください</option>${["shun","tsu"].map(a=>`<option value="${a}" ${(ed.author||la)===a?"selected":""}>${a}</option>`).join("")}</select>
+  <label>日付</label><input type="date" id="dd" value="${esc(ed.date||dk(ed)||today)}">
   <label>ハッシュタグ（スペース区切り）</label><input id="tg" placeholder="温泉 グルメ 2026夏" value="${esc((ed.tags||[]).join(" "))}">
   <label>サムネイル</label>${ed.thumb?im(ed.thumb,"thm"):""}<input type="file" id="th" accept="image/*">
   <label>本文</label><div id="bl"></div>
   <div class="row"><button class="btn ghost" id="at">文章を足す</button><button class="btn ghost" id="a1">写真（1枚）</button><button class="btn ghost" id="a2">スライドショー</button><button class="btn ghost" id="a3">動画</button></div>
   <p class="note" id="st"></p><button class="btn" id="sv">公開する</button></div>`;
   const st=m=>document.getElementById("st").textContent=m;
-  const sync=()=>{ed.title=t.value;ed.author=aw.value;ed.pref=pf.value;ed.tags=tg.value.split(/[\s,　、#＃]+/).filter(Boolean);document.querySelectorAll("#bl textarea").forEach(x=>ed.blocks[x.dataset.i].v=x.value)};
+  const sync=()=>{ed.title=t.value;ed.date=dd.value;ed.author=aw.value;ed.pref=pf.value;ed.tags=tg.value.split(/[\s,　、#＃]+/).filter(Boolean);document.querySelectorAll("#bl textarea").forEach(x=>ed.blocks[x.dataset.i].v=x.value)};
   const lab={text:"文章",img:"写真",show:"スライドショー",vid:"動画"};
   const inner=(b,i)=>b.t==="text"?`<div class="f"><textarea data-i="${i}" placeholder="ここに文章を書く">${esc(b.v)}</textarea></div>`:b.t==="img"?im(b.u,"pv1"):b.t==="vid"?`<video src="${esc(b.u)}" controls></video>`:
     `<div class="sg">${b.us.map((u,k)=>`<div>${im(u)}<div class="ib"><button data-sm="${i},${k},-1">◀</button><button class="x" data-sx="${i},${k}">✕</button><button data-sm="${i},${k},1">▶</button></div></div>`).join("")}</div><button class="btn ghost" data-sa="${i}" style="margin-top:10px">写真を追加</button>`;
@@ -296,7 +300,7 @@ function editView(){
     if(!ed.author)return st("書いた人（shun / tsu）を選択してください");
     if(!ed.pref)return st("都道府県を選択してください");
     if(!db)return st("保存できない環境です");
-    const id=ed.id||("p"+Date.now().toString(36)),data={title:ed.title.trim(),author:ed.author,pref:ed.pref,tags:ed.tags,thumb:ed.thumb||"",blocks:ed.blocks.filter(x=>x.t==="text"?x.v.trim():x.t==="show"?x.us.length:1),created:ed.created||Date.now()};
+    const id=ed.id||("p"+Date.now().toString(36)),data={title:ed.title.trim(),date:ed.date||today,author:ed.author,pref:ed.pref,tags:ed.tags,thumb:ed.thumb||"",blocks:ed.blocks.filter(x=>x.t==="text"?x.v.trim():x.t==="show"?x.us.length:1),created:ed.created||Date.now()};
     st("保存中…");
     try{await db.collection("posts").doc(id).set(data);try{localStorage.setItem("author",data.author)}catch(e){}ed=null;view={n:"home"};render();scrollTo(0,0)}catch(e){st("保存できませんでした（権限がない可能性があります）")}};
 }
